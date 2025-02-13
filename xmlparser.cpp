@@ -70,7 +70,7 @@ namespace xmlParser
                 }
                 else
                 {
-                    while (i < lineSize && line[i] == ' ' || line[i] == '\n' || line[i] == '\r')
+                    while (i < lineSize && (line[i] == ' ' || line[i] == '\n' || line[i] == '\r'))
                     {
                         ++i;
                     }

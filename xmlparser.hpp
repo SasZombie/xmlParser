@@ -23,15 +23,15 @@ namespace xmlParser
     struct xmlNode : public std::enable_shared_from_this<xmlNode>
     {
 
+        TokenType tagType;
         std::string tagName;
-        std::string text;
         std::weak_ptr<xmlNode> prev;
         std::vector<std::shared_ptr<xmlNode>> nodes;
 
         xmlNode() = default;
 
-        xmlNode(const std::string &n_tagName, std::shared_ptr<xmlNode> parent)
-            : tagName(n_tagName), prev(std::move(parent)) {}
+        xmlNode(TokenType n_tagType, const std::string &n_tagName, std::shared_ptr<xmlNode> parent)
+            : tagType(n_tagType) ,tagName(n_tagName), prev(std::move(parent)) {}
 
         void addChild(std::shared_ptr<xmlNode> child);
 

@@ -28,10 +28,10 @@ namespace xmlParser
     void xmlNode::printTree(int level) const
     {
         std::cout << std::string(level * 2, ' ') << this->tagName << "\n";
-        if (!this->text.empty())
-        {
-            std::cout << this->text << '\n';
-        }
+        // if (!this->text.empty())
+        // {
+        //     std::cout << this->text << '\n';
+        // }
         for (const auto &child : nodes)
         {
             child->printTree(level + 1);
@@ -116,7 +116,7 @@ namespace xmlParser
             case TokenType::TAG_OPEN:
             {
 
-                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(value, current);
+                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
                 current->addChild(child);
                 current = child;
 
@@ -126,7 +126,7 @@ namespace xmlParser
             case TokenType::TAG_CLOSE:
             {
 
-                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(value, root);
+                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, root);
                 current->addChild(child);
                 if (auto parent = current->prev.lock())
                 {
@@ -137,7 +137,8 @@ namespace xmlParser
 
             case TokenType::TEXT:
             {
-                current->text = value;
+                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
+                current->addChild(child);
                 break;
             }
 

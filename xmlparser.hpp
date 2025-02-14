@@ -3,6 +3,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <ranges>
+#include <algorithm>
 #include <memory>
 
 namespace xmlParser
@@ -30,18 +32,19 @@ namespace xmlParser
 
         xmlNode() = default;
 
-        xmlNode(TokenType n_tagType, const std::string &n_tagName, std::shared_ptr<xmlNode> parent)
-            : tagType(n_tagType) ,tagName(n_tagName), prev(std::move(parent)) {}
+        xmlNode(TokenType n_tagType, const std::string &n_tagName, std::shared_ptr<xmlNode> parent) noexcept
+            : tagType(n_tagType), tagName(n_tagName), prev(std::move(parent)) {}
 
-        void addChild(std::shared_ptr<xmlNode> child);
+        void addChild(std::shared_ptr<xmlNode> child) noexcept;
 
-        void printTree(int level = 0) const;
+        void printTree(int level = 0) const noexcept;
 
-        std::vector<std::shared_ptr<xmlNode>> findAllNodes(std::string_view target);
+        std::vector<std::shared_ptr<xmlNode>> findAllNodes(std::string_view target) noexcept;
 
-        void findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results);
+        void findAll(std::vector<std::shared_ptr<xmlNode>> &results) const noexcept;
+        void findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results) noexcept;
     };
 
     std::vector<xmlToken> tokenizeString(std::ifstream &input);
     std::shared_ptr<xmlNode> readXML(const std::string &filePath);
-}
+} //namespace xmlParser

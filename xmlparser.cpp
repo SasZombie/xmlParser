@@ -3,11 +3,21 @@
 namespace xmlParser
 {
 
-    void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results)
+    void xmlNode::findAll(std::vector<std::shared_ptr<xmlNode>> &results) const noexcept
     {
-        if (tagName == target)
+        for (const auto &child : nodes)
+        {
+            results.push_back(child);
+            child->findAll(results);
+        }
+    }
+
+    void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results) noexcept
+    {
+        if (tagName.contains(target))
         {
             results.push_back(shared_from_this());
+            findAll(results);
         }
 
         for (const auto &child : nodes)
@@ -16,29 +26,49 @@ namespace xmlParser
         }
     }
 
-    std::vector<std::shared_ptr<xmlNode>> xmlNode::findAllNodes(std::string_view target)
+    std::vector<std::shared_ptr<xmlNode>> xmlNode::findAllNodes(std::string_view target) noexcept
     {
         std::vector<std::shared_ptr<xmlNode>> results;
+        size_t len = target.size();
 
-        findNode(target, results);
+        if(target[0] == '<' && target[len-1] == '>')
+            findNode(target.substr(1, len-2) , results);
+        else
+            findNode(target, results);
+
 
         return results;
     }
 
-    void xmlNode::printTree(int level) const
+    void xmlNode::printTree(int level) const noexcept
     {
-        std::cout << std::string(level * 2, ' ') << this->tagName << "\n";
-        // if (!this->text.empty())
-        // {
-        //     std::cout << this->text << '\n';
-        // }
+        switch (tagType)
+        {
+        case TokenType::TAG_CLOSE:
+            std::cout << std::string(level * 2, ' ') << "</" << this->tagName << ">\n";
+
+            break;
+
+        case TokenType::TAG_OPEN:
+            std::cout << std::string(level * 2, ' ') << "<" << this->tagName << ">\n";
+
+            break;
+
+        case TokenType::TEXT:
+            std::cout << std::string(level * 2, ' ') << this->tagName << '\n';
+
+            break;
+        default:
+            std::cerr << "Unreachable!\n";
+            break;
+        }
         for (const auto &child : nodes)
         {
             child->printTree(level + 1);
         }
     }
 
-    void xmlNode::addChild(std::shared_ptr<xmlNode> child)
+    void xmlNode::addChild(std::shared_ptr<xmlNode> child) noexcept
     {
         child->prev = shared_from_this();
         nodes.push_back(std::move(child));
@@ -46,6 +76,9 @@ namespace xmlParser
 
     std::vector<xmlToken> tokenizeString(std::ifstream &input)
     {
+        size_t openTokens = 0;
+        size_t closeTokens = 0;
+
         std::string line;
 
         std::vector<xmlToken> tokens;
@@ -64,9 +97,28 @@ namespace xmlParser
                         ++size;
                         ++i;
                     }
+                    if (line[i] != '>')
+                    {
+                        throw std::runtime_error("Unclosed tag at " + line + "\nInvalid formated Document\n");
+                    }
                     ++size;
 
-                    tokens.push_back({(line[start + 1] == '/') ? TokenType::TAG_CLOSE : TokenType::TAG_OPEN, line.substr(start, size)});
+                    TokenType currentType;
+
+                    if (line[start + 1] == '/')
+                    {
+                        ++closeTokens;
+                        currentType = TokenType::TAG_CLOSE;
+                        // Dropping the </ and >
+                        tokens.push_back({currentType, line.substr(start + 2, size - 3)});
+                    }
+                    else
+                    {
+                        ++openTokens;
+                        currentType = TokenType::TAG_OPEN;
+                        // Dropping the </ and >
+                        tokens.push_back({currentType, line.substr(start + 1, size - 2)});
+                    }
                 }
                 else
                 {
@@ -85,11 +137,17 @@ namespace xmlParser
                     }
                     --i;
 
-                    if (size == 0)
-                        continue;
-                    tokens.push_back({TokenType::TEXT, line.substr(start, size)});
+                    if (size != 0)
+                    {
+                        tokens.push_back({TokenType::TEXT, line.substr(start, size)});
+                    }
                 }
             }
+        }
+
+        if (closeTokens != openTokens)
+        {
+            std::cerr << "\033[1;31mWarning! Missing Opening Or Closing Tags\033[0m\n";
         }
 
         return tokens;

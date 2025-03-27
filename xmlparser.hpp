@@ -13,7 +13,8 @@ namespace xmlParser
     {
         TAG_OPEN,
         TAG_CLOSE,
-        TEXT
+        TEXT,
+        META
     };
 
     struct xmlToken

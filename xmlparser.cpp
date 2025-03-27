@@ -55,6 +55,7 @@ namespace xmlParser
 
             break;
 
+        case TokenType::META:
         case TokenType::TEXT:
             std::cout << std::string(level * 2, ' ') << this->tagName << '\n';
 
@@ -79,22 +80,32 @@ namespace xmlParser
     {
         size_t openTokens = 0;
         size_t closeTokens = 0;
+        size_t currsor = 0;
 
         std::string line;
         std::vector<xmlToken> tokens;
 
         std::getline(input, line);
-
-        // tokens.push_back({currentType, line.substr(start + 2, size - 3)});
-
         //XML version
         if(line.size() > 2 && line[1] == '?' && line.back() == '>') 
         {  
-            tokens.push_back({TokenType::TEXT, line});
+            tokens.push_back({TokenType::META, line});
+            currsor = input.cur;
         }
         else
         {
             input.seekg(0);
+        }
+
+        std::getline(input, line);
+        //Doctype version
+        if(line.find("DOCTYPE") != std::string::npos) 
+        {  
+            tokens.push_back({TokenType::META, line});
+        }
+        else
+        {
+            input.seekg(currsor);
         }
 
         while (std::getline(input, line))
@@ -215,12 +226,14 @@ namespace xmlParser
                 break;
             }
 
+            case TokenType::META:
             case TokenType::TEXT:
             {
                 std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
                 current->addChild(child);
                 break;
             }
+
 
             default:
                 std::cerr << "Unreachable! How did we get here?\n";

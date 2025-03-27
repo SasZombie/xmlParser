@@ -90,7 +90,8 @@ namespace xmlParser
         if(line.size() > 2 && line[1] == '?' && line.back() == '>') 
         {  
             tokens.push_back({TokenType::META, line});
-            currsor = input.cur;
+
+            currsor = input.tellg();
         }
         else
         {
@@ -192,15 +193,16 @@ namespace xmlParser
 
         if(tokens.size() == 0)
         {
-            std::cerr << "File is empty\n";
+            std::cerr << "File is empty!\n";
             return std::make_shared<xmlNode>();
         }
 
-        std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>(tokens[0].kind, tokens[0].value, nullptr);
+        // std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>(tokens[0].kind, tokens[0].value, nullptr);
+        std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>();
         std::shared_ptr<xmlNode> current = root;
 
         //Ugly ahh syntax for skipping 1 elem :)
-        for (const auto &[kind, value] : tokens | std::ranges::views::drop(1)) 
+        for (const auto &[kind, value] : tokens /* | std::ranges::views::drop(1) */) 
         {
             switch (kind)
             {
@@ -234,6 +236,11 @@ namespace xmlParser
                 break;
             }
 
+            // case TokenType::META:
+            // {
+            //     std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
+
+            // }
 
             default:
                 std::cerr << "Unreachable! How did we get here?\n";

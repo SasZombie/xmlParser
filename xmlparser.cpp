@@ -1,4 +1,5 @@
 #include "xmlparser.hpp"
+#include <ranges>
 
 namespace xmlParser
 {
@@ -80,8 +81,22 @@ namespace xmlParser
         size_t closeTokens = 0;
 
         std::string line;
-
         std::vector<xmlToken> tokens;
+
+        std::getline(input, line);
+
+        // tokens.push_back({currentType, line.substr(start + 2, size - 3)});
+
+        //XML version
+        if(line.size() > 2 && line[1] == '?' && line.back() == '>') 
+        {  
+            tokens.push_back({TokenType::TEXT, line});
+        }
+        else
+        {
+            input.seekg(0);
+        }
+
         while (std::getline(input, line))
         {
             size_t lineSize = line.size();
@@ -164,10 +179,17 @@ namespace xmlParser
 
         std::vector<xmlToken> tokens = tokenizeString(input);
 
-        std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>();
+        if(tokens.size() == 0)
+        {
+            std::cerr << "File is empty\n";
+            return std::make_shared<xmlNode>();
+        }
+
+        std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>(tokens[0].kind, tokens[0].value, nullptr);
         std::shared_ptr<xmlNode> current = root;
 
-        for (const auto &[kind, value] : tokens)
+        //Ugly ahh syntax for skipping 1 elem :)
+        for (const auto &[kind, value] : tokens | std::ranges::views::drop(1)) 
         {
             switch (kind)
             {

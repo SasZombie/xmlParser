@@ -13,7 +13,7 @@ namespace xmlParser
         if (str1 == str2)
             return true;
         size_t len1 = str1.length(), len2 = str2.length();
-     
+
         if (len1 <= len2)
             return false;
 
@@ -23,10 +23,10 @@ namespace xmlParser
         {
             ++ind;
         }
-        
+
         return (ind == len1 && str1[ind + 1] == ' ');
     }
-    
+
     void xmlNode::findAll(std::vector<std::shared_ptr<xmlNode>> &results) const noexcept
     {
         for (const auto &child : nodes)
@@ -38,8 +38,7 @@ namespace xmlParser
 
     void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results) noexcept
     {
-        // if (tagName.contains(target))
-        if(contains(tagName, target))
+        if (contains(tagName, target))
         {
             results.push_back(shared_from_this());
             findAll(results);
@@ -48,6 +47,71 @@ namespace xmlParser
         for (const auto &child : nodes)
         {
             child->findNode(target, results);
+        }
+    }
+    // books/book
+    // book = field1, field2, field3
+
+    bool xmlNode::checkRec(const nodeFilter &filter) const noexcept
+    {
+        for (const auto &child : nodes)
+        {
+            if (filter.field == child->tagName)
+            {
+                if (!child->nodes.empty() && child->nodes[0] != nullptr)
+                {
+                    if (filter.predicate(child->nodes[0]->tagName))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            if (child->checkRec(filter))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results, const nodeFilter &filter) noexcept
+    {
+        if (contains(tagName, target))
+        {
+
+            if (checkRec(filter))
+            {
+                results.push_back(shared_from_this());
+                findAll(results);
+            }
+        }
+        for (const auto &child : nodes)
+        {
+            child->findNode(target, results, filter);
+        }
+    }
+
+    void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results, const std::vector<nodeFilter> &filters) noexcept
+    {
+        if (contains(tagName, target))
+        {
+            for (const auto &filter : filters)
+            {
+
+                if (!checkRec(filter))
+                {
+                    return;
+                }
+            }
+            results.push_back(shared_from_this());
+            findAll(results);
+        }
+
+        for (const auto &child : nodes)
+        {
+            child->findNode(target, results, filters);
         }
     }
 
@@ -60,6 +124,32 @@ namespace xmlParser
             findNode(target.substr(1, len - 2), results);
         else
             findNode(target, results);
+
+        return results;
+    }
+
+    std::vector<std::shared_ptr<xmlNode>> xmlNode::findAllNodes(std::string_view target, const nodeFilter &filter) noexcept
+    {
+        std::vector<std::shared_ptr<xmlNode>> results;
+        size_t len = target.size();
+
+        if (target[0] == '<' && target[len - 1] == '>')
+            findNode(target.substr(1, len - 2), results, filter);
+        else
+            findNode(target, results, filter);
+
+        return results;
+    }
+
+    std::vector<std::shared_ptr<xmlNode>> xmlNode::findAllNodes(std::string_view target, const std::vector<nodeFilter> &filters) noexcept
+    {
+        std::vector<std::shared_ptr<xmlNode>> results;
+        size_t len = target.size();
+
+        if (target[0] == '<' && target[len - 1] == '>')
+            findNode(target.substr(1, len - 2), results, filters);
+        else
+            findNode(target, results, filters);
 
         return results;
     }

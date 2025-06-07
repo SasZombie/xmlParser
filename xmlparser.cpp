@@ -1,12 +1,149 @@
 #include "xmlparser.hpp"
 #include <ranges>
+#include <stack>
 
 namespace xmlParser
 {
 
-    // token.value
-    // token.value siAdnorato="BLaLBalBla"
-    // token.values siAdnorato="BLaLBalBla"
+    enum class expects
+    {
+        LESS_THEN,
+        GREATER_THEN,
+        ATTRIBUTE_NAME,
+        CLOSING_SLASH,
+        NODE_NAME,
+        NODE_CLOSING_NAME,
+        NODE_VALUE,
+        ATTRIBUTE_VALUE,
+        EQUALS,
+        OPEN_QUATE,
+        CLOSE_QUATE,
+        NOT_EXPECTED
+    };
+
+    static bool isExpected(expects expected, char c)
+    {
+        using enum expects;
+        switch (expected)
+        {
+        case LESS_THEN:
+            return c == '<';
+        case GREATER_THEN:
+            return c == '>';
+
+        case NODE_NAME:
+        case NODE_CLOSING_NAME:
+        case NODE_VALUE:
+        case ATTRIBUTE_VALUE:
+        case ATTRIBUTE_NAME:
+            return c != '<' && c != '>' && c != '"' && c != '/' && c != '=';
+
+        case EQUALS:
+            return c == '=';
+
+        case CLOSE_QUATE:
+        case OPEN_QUATE:
+            return c == '"';
+        case CLOSING_SLASH:
+            return c == '/';
+        case NOT_EXPECTED:
+            return false;
+        }
+
+        return false;
+    }
+
+    static std::vector<std::string> tokenize(const std::string &line)
+    {
+        std::vector<std::string> tokens;
+        std::string current;
+        bool inQuote = false;
+        bool inNode = false;
+
+        for (size_t i = 0; i < line.size(); ++i)
+        {
+            char c = line[i];
+
+            if (inQuote)
+            {
+                if (c == '"')
+                {
+                    tokens.push_back(current);
+                    current.clear();
+                    inQuote = false;
+                }
+
+                current += c;
+            }
+            else if (inNode)
+            {
+                if (c == '<')
+                {
+                    tokens.push_back(current);
+                    tokens.push_back("<");
+                    current.clear();
+                    inNode = false;
+                }
+                else if (c == '\0')
+                {
+                    tokens.push_back(current);
+                    current.clear();
+                    inNode = false;
+                }
+                else
+                {
+                    current += c;
+                }
+            }
+            else
+            {
+                if (std::isspace(c))
+                {
+                    if (!current.empty())
+                    {
+                        tokens.push_back(current);
+                        current.clear();
+                    }
+                }
+                else if (c == '<' || c == '>' || c == '=' || c == '/')
+                {
+                    if (!current.empty())
+                    {
+                        tokens.push_back(current);
+                        current.clear();
+                    }
+                    tokens.push_back(std::string(1, c));
+
+                    if (c == '>')
+                    {
+                        inNode = true;
+                    }
+                }
+                else if (c == '"')
+                {
+                    if (!current.empty())
+                    {
+                        tokens.push_back(current);
+                        current.clear();
+                    }
+                    tokens.push_back("\"");
+                    inQuote = true;
+                }
+                else
+                {
+                    current += c;
+                }
+            }
+        }
+
+        if (!current.empty())
+        {
+            tokens.push_back(current);
+        }
+
+        return tokens;
+    }
+
     // Where, what
     static bool contains(std::string_view str1, std::string_view str2) noexcept
     {
@@ -202,7 +339,7 @@ namespace xmlParser
         // XML version
         if (line.size() > 2 && line[1] == '?' && line.back() == '>')
         {
-            tokens.push_back({TokenType::META, line});
+            tokens.push_back({TokenType::META, line, {}});
 
             currsor = input.tellg();
         }
@@ -215,72 +352,108 @@ namespace xmlParser
         // Doctype version
         if (line.find("DOCTYPE") != std::string::npos)
         {
-            tokens.push_back({TokenType::META, line});
+            tokens.push_back({TokenType::META, line, {}});
         }
         else
         {
             input.seekg(currsor);
         }
 
+        expects expected = expects::LESS_THEN, expected2 = expects::NOT_EXPECTED;
+
+        std::vector<xmlAttribute> attributes;
+        std::stack<std::string> nodeNames;
+        xmlAttribute attr;
+        // MARK: TODO!!!
         while (std::getline(input, line))
         {
-            size_t lineSize = line.size();
-            for (size_t i = 0; i < lineSize; ++i)
+            const auto &words = tokenize(line);
+            for (size_t i = 0; i < words.size(); ++i)
             {
-                if (line[i] == '<')
+
+                bool isExpected1 = isExpected(expected, words[i][0]);
+                bool isExpected2 = isExpected(expected2, words[i][0]);
+                if (!isExpected1 && !isExpected2)
                 {
-                    size_t size = 0;
-                    size_t start = i;
-
-                    while (i < lineSize && line[i] != '>')
-                    {
-                        ++size;
-                        ++i;
-                    }
-                    if (line[i] != '>')
-                    {
-                        throw std::runtime_error("Unclosed tag at " + line + "\nInvalid formated Document\n");
-                    }
-                    ++size;
-
-                    TokenType currentType;
-
-                    if (line[start + 1] == '/')
-                    {
-                        ++closeTokens;
-                        currentType = TokenType::TAG_CLOSE;
-                        // Dropping the </ and >
-                        tokens.push_back({currentType, line.substr(start + 1, size - 2)});
-                    }
-                    else
-                    {
-                        ++openTokens;
-                        currentType = TokenType::TAG_OPEN;
-                        // Dropping the </ and >
-                        tokens.push_back({currentType, line.substr(start + 1, size - 2)});
-                    }
+                    // std::cout << (int)expected << ' ' << (int)expected2 << '\n';
+                    // for (const auto &elem : tokens)
+                    // {
+                    //     std::cout << elem << '\n';
+                    // }
+                    throw std::runtime_error("Invalid Formated Doccument :3, at Word:" + words[i]);
                 }
                 else
                 {
-                    while (i < lineSize && (line[i] == ' ' || line[i] == '\n' || line[i] == '\r'))
+                    expected = isExpected1 ? expected : expected2;
+                    expected2 = expects::NOT_EXPECTED;
+                }
+
+                switch (expected)
+                {
+                case expects::LESS_THEN:
+                    expected = expects::NODE_NAME;
+                    expected2 = expects::CLOSING_SLASH;
+
+                    break;
+                case expects::NODE_NAME:
+                    tokens.push_back({TokenType::TAG_OPEN, words[i], {}});
+                    expected = expects::GREATER_THEN;
+                    expected2 = expects::ATTRIBUTE_NAME;
+
+                    break;
+                case expects::NODE_VALUE:
+                    tokens.push_back({TokenType::TEXT, words[i], {}});
+                    expected = expects::LESS_THEN;
+                    break;
+                case expects::GREATER_THEN:
+                    if (!attr.value.empty() && !attr.name.empty())
                     {
-                        ++i;
+                        attributes.push_back(attr);
+                        attr.name.clear();
+                        attr.value.clear();
                     }
 
-                    size_t size = 0;
-                    size_t start = i;
-
-                    while (i < lineSize && line[i] != '<')
+                    if (!attributes.empty())
                     {
-                        ++size;
-                        ++i;
+                        tokens.back().attr = attributes;
+                        attributes.clear();
                     }
-                    --i;
-
-                    if (size != 0)
+                    expected = expects::NODE_VALUE;
+                    expected2 = expects::LESS_THEN;
+                    break;
+                case expects::ATTRIBUTE_NAME:
+                    if (!attr.value.empty() && !attr.name.empty())
                     {
-                        tokens.push_back({TokenType::TEXT, line.substr(start, size)});
+                        attributes.push_back(attr);
+                        attr.name.clear();
+                        attr.value.clear();
                     }
+                    attr.name = words[i];
+                    expected = expects::EQUALS;
+                    break;
+                case expects::EQUALS:
+                    expected = expects::OPEN_QUATE;
+                    break;
+                case expects::OPEN_QUATE:
+                    expected = expects::ATTRIBUTE_VALUE;
+                    break;
+                case expects::ATTRIBUTE_VALUE:
+                    attr.value = words[i];
+                    expected = expects::CLOSE_QUATE;
+                    break;
+                case expects::CLOSE_QUATE:
+                    expected = expects::GREATER_THEN;
+                    expected2 = expects::ATTRIBUTE_NAME;
+                    break;
+                case expects::CLOSING_SLASH:
+                    expected = expects::NODE_CLOSING_NAME;
+                    break;
+                case expects::NODE_CLOSING_NAME:
+                    tokens.push_back( {TokenType::TAG_CLOSE, "/" + words[i], {}});
+                    expected = expects::GREATER_THEN;
+                    break;
+                case expects::NOT_EXPECTED:
+                    throw std::runtime_error("Not expected");
                 }
             }
         }

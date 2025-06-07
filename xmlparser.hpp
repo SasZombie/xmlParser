@@ -15,6 +15,7 @@ namespace xmlParser
         TAG_OPEN,
         TAG_CLOSE,
         TEXT,
+        ATTRIBUTE,
         META
     };
 
@@ -28,7 +29,7 @@ namespace xmlParser
     {
         TokenType kind;
         std::string value;
-        xmlAttribute attr;
+        std::vector<xmlAttribute> attr;
     };
 
     struct nodeFilter
@@ -47,7 +48,7 @@ namespace xmlParser
         xmlNode() = default;
 
         xmlNode(TokenType n_tagType, const std::string &n_tagName, std::shared_ptr<xmlNode> parent) noexcept
-            : token(n_tagType, n_tagName), prev(std::move(parent)) {}
+            : token(n_tagType, n_tagName, {}), prev(std::move(parent)) {}
 
         void addChild(std::shared_ptr<xmlNode> child) noexcept;
 

@@ -2,3 +2,8 @@
 main.cpp
 sample.xml
 TestDocx/*
+test.cpp
+tests.cpp
+text
+build/*
+*.out

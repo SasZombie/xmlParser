@@ -4,9 +4,9 @@
 namespace xmlParser
 {
 
-    // tagName
-    // tagName siAdnorato="BLaLBalBla"
-    // tagNames siAdnorato="BLaLBalBla"
+    // token.value
+    // token.value siAdnorato="BLaLBalBla"
+    // token.values siAdnorato="BLaLBalBla"
     // Where, what
     static bool contains(std::string_view str1, std::string_view str2) noexcept
     {
@@ -38,7 +38,7 @@ namespace xmlParser
 
     void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results) noexcept
     {
-        if (contains(tagName, target))
+        if (contains(token.value, target))
         {
             results.push_back(shared_from_this());
             findAll(results);
@@ -56,11 +56,11 @@ namespace xmlParser
     {
         for (const auto &child : nodes)
         {
-            if (filter.field == child->tagName)
+            if (filter.field == child->token.value)
             {
                 if (!child->nodes.empty() && child->nodes[0] != nullptr)
                 {
-                    if (filter.predicate(child->nodes[0]->tagName))
+                    if (filter.predicate(child->nodes[0]->token.value))
                     {
                         return true;
                     }
@@ -78,7 +78,7 @@ namespace xmlParser
 
     void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results, const nodeFilter &filter) noexcept
     {
-        if (contains(tagName, target))
+        if (contains(token.value, target))
         {
 
             if (checkRec(filter))
@@ -95,7 +95,7 @@ namespace xmlParser
 
     void xmlNode::findNode(std::string_view target, std::vector<std::shared_ptr<xmlNode>> &results, const std::vector<nodeFilter> &filters) noexcept
     {
-        if (contains(tagName, target))
+        if (contains(token.value, target))
         {
             for (const auto &filter : filters)
             {
@@ -156,21 +156,21 @@ namespace xmlParser
 
     void xmlNode::printTree(int level) const noexcept
     {
-        switch (tagType)
+        switch (token.kind)
         {
         case TokenType::TAG_CLOSE:
-            std::cout << std::string(level * 2, ' ') << "</" << this->tagName << ">\n";
+            std::cout << std::string(level * 2, ' ') << "<" << this->token.value << ">\n";
 
             break;
 
         case TokenType::TAG_OPEN:
-            std::cout << std::string(level * 2, ' ') << "<" << this->tagName << ">\n";
+            std::cout << std::string(level * 2, ' ') << "<" << this->token.value << ">\n";
 
             break;
 
         case TokenType::META:
         case TokenType::TEXT:
-            std::cout << std::string(level * 2, ' ') << this->tagName << '\n';
+            std::cout << std::string(level * 2, ' ') << this->token.value << '\n';
 
             break;
         default:
@@ -315,7 +315,7 @@ namespace xmlParser
         std::shared_ptr<xmlNode> current = root;
 
         // Ugly ahh syntax for skipping 1 elem :)
-        for (const auto &[kind, value] : tokens /* | std::ranges::views::drop(1) */)
+        for (const auto &[kind, value, attr] : tokens /* | std::ranges::views::drop(1) */)
         {
             switch (kind)
             {

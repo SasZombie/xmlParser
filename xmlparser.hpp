@@ -18,10 +18,17 @@ namespace xmlParser
         META
     };
 
+    struct xmlAttribute
+    {
+        std::string name;
+        std::string value;
+    };
+
     struct xmlToken
     {
         TokenType kind;
         std::string value;
+        xmlAttribute attr;
     };
 
     struct nodeFilter
@@ -33,15 +40,14 @@ namespace xmlParser
     struct xmlNode : public std::enable_shared_from_this<xmlNode>
     {
 
-        TokenType tagType;
-        std::string tagName;
+        xmlToken token;
         std::weak_ptr<xmlNode> prev;
         std::vector<std::shared_ptr<xmlNode>> nodes;
 
         xmlNode() = default;
 
         xmlNode(TokenType n_tagType, const std::string &n_tagName, std::shared_ptr<xmlNode> parent) noexcept
-            : tagType(n_tagType), tagName(n_tagName), prev(std::move(parent)) {}
+            : token(n_tagType, n_tagName), prev(std::move(parent)) {}
 
         void addChild(std::shared_ptr<xmlNode> child) noexcept;
 

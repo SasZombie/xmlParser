@@ -7,6 +7,7 @@
 #include <ranges>
 #include <algorithm>
 #include <memory>
+#include <set>
 
 namespace xmlParser
 {
@@ -23,13 +24,18 @@ namespace xmlParser
     {
         std::string name;
         std::string value;
+
+        bool operator<(const xmlAttribute &other) const
+        {
+            return name < other.name;
+        }
     };
 
     struct xmlToken
     {
         TokenType kind;
         std::string value;
-        std::vector<xmlAttribute> attr;
+        std::set<xmlAttribute> attr;
     };
 
     struct nodeFilter
@@ -47,8 +53,8 @@ namespace xmlParser
 
         xmlNode() = default;
 
-        xmlNode(TokenType n_tagType, const std::string &n_tagName, std::shared_ptr<xmlNode> parent) noexcept
-            : token(n_tagType, n_tagName, {}), prev(std::move(parent)) {}
+        xmlNode(const xmlToken &n_token, std::shared_ptr<xmlNode> parent) noexcept
+            : token(n_token), prev(std::move(parent)) {}
 
         void addChild(std::shared_ptr<xmlNode> child) noexcept;
 

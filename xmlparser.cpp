@@ -11,6 +11,7 @@ namespace xmlParser
         GREATER_THEN,
         ATTRIBUTE_NAME,
         CLOSING_SLASH,
+        SELF_CLOSING_SLASH,
         NODE_NAME,
         NODE_CLOSING_NAME,
         NODE_VALUE,
@@ -45,6 +46,7 @@ namespace xmlParser
         case OPEN_QUATE:
             return c == '"';
         case CLOSING_SLASH:
+        case SELF_CLOSING_SLASH:
             return c == '/';
         case NOT_EXPECTED:
             return false;
@@ -359,21 +361,33 @@ namespace xmlParser
             input.seekg(currsor);
         }
 
-        expects expected = expects::LESS_THEN, expected2 = expects::NOT_EXPECTED;
+        expects expected[3] = {expects::LESS_THEN, expects::NOT_EXPECTED, expects::NOT_EXPECTED};
+        size_t expectedSize = sizeof(expected) / sizeof(expected[0]);
 
-        std::vector<xmlAttribute> attributes;
+        std::set<xmlAttribute> attributes;
         std::stack<std::string> nodeNames;
         xmlAttribute attr;
+        std::string nodeValue;
         // MARK: TODO!!!
         while (std::getline(input, line))
         {
             const auto &words = tokenize(line);
             for (size_t i = 0; i < words.size(); ++i)
             {
+                bool found = false;
 
-                bool isExpected1 = isExpected(expected, words[i][0]);
-                bool isExpected2 = isExpected(expected2, words[i][0]);
-                if (!isExpected1 && !isExpected2)
+                for (size_t exp = 0; exp < expectedSize; ++exp)
+                {
+                    if (isExpected(expected[exp], words[i][0]))
+                    {
+                        found = true;
+                        expected[0] = expected[exp];
+                        expected[1] = expects::NOT_EXPECTED;
+                        expected[2] = expects::NOT_EXPECTED;
+                        break;
+                    }
+                }
+                if (!found)
                 {
                     // std::cout << (int)expected << ' ' << (int)expected2 << '\n';
                     // for (const auto &elem : tokens)
@@ -382,76 +396,99 @@ namespace xmlParser
                     // }
                     throw std::runtime_error("Invalid Formated Doccument :3, at Word:" + words[i]);
                 }
-                else
-                {
-                    expected = isExpected1 ? expected : expected2;
-                    expected2 = expects::NOT_EXPECTED;
-                }
 
-                switch (expected)
+                switch (expected[0])
                 {
                 case expects::LESS_THEN:
-                    expected = expects::NODE_NAME;
-                    expected2 = expects::CLOSING_SLASH;
-
+                    if (!nodeValue.empty())
+                    {
+                        tokens.push_back({TokenType::TEXT, nodeValue, {}});
+                        nodeValue.clear();
+                    }
+                    expected[0] = expects::NODE_NAME;
+                    expected[1] = expects::CLOSING_SLASH;
                     break;
+
                 case expects::NODE_NAME:
                     tokens.push_back({TokenType::TAG_OPEN, words[i], {}});
-                    expected = expects::GREATER_THEN;
-                    expected2 = expects::ATTRIBUTE_NAME;
+                    expected[0] = expects::GREATER_THEN;
+                    expected[1] = expects::ATTRIBUTE_NAME;
+                    expected[2] = expects::SELF_CLOSING_SLASH;
+                    ++openTokens;
 
                     break;
+
                 case expects::NODE_VALUE:
-                    tokens.push_back({TokenType::TEXT, words[i], {}});
-                    expected = expects::LESS_THEN;
+                    nodeValue = nodeValue + words[i];
+                    expected[0] = expects::LESS_THEN;
+                    expected[1] = expects::NODE_VALUE;
                     break;
+
                 case expects::GREATER_THEN:
                     if (!attr.value.empty() && !attr.name.empty())
                     {
-                        attributes.push_back(attr);
+                        const auto result = attributes.insert(attr);
+                        if (!result.second)
+                        {
+                            throw std::runtime_error("Attribute " + words[i] + " is redifined!\n");
+                        }
                         attr.name.clear();
                         attr.value.clear();
                     }
 
                     if (!attributes.empty())
                     {
+
                         tokens.back().attr = attributes;
                         attributes.clear();
                     }
-                    expected = expects::NODE_VALUE;
-                    expected2 = expects::LESS_THEN;
+                    expected[0] = expects::NODE_VALUE;
+                    expected[1] = expects::LESS_THEN;
                     break;
                 case expects::ATTRIBUTE_NAME:
                     if (!attr.value.empty() && !attr.name.empty())
                     {
-                        attributes.push_back(attr);
+                        const auto result = attributes.insert(attr);
+                        if (!result.second)
+                        {
+                            throw std::runtime_error("Attribute " + words[i] + " is redifined!\n");
+                        }
                         attr.name.clear();
                         attr.value.clear();
                     }
                     attr.name = words[i];
-                    expected = expects::EQUALS;
+                    expected[0] = expects::EQUALS;
                     break;
                 case expects::EQUALS:
-                    expected = expects::OPEN_QUATE;
+                    expected[0] = expects::OPEN_QUATE;
                     break;
                 case expects::OPEN_QUATE:
-                    expected = expects::ATTRIBUTE_VALUE;
+                    expected[0] = expects::ATTRIBUTE_VALUE;
                     break;
                 case expects::ATTRIBUTE_VALUE:
                     attr.value = words[i];
-                    expected = expects::CLOSE_QUATE;
+                    expected[0] = expects::CLOSE_QUATE;
                     break;
                 case expects::CLOSE_QUATE:
-                    expected = expects::GREATER_THEN;
-                    expected2 = expects::ATTRIBUTE_NAME;
+                    expected[0] = expects::GREATER_THEN;
+                    expected[1] = expects::ATTRIBUTE_NAME;
+                    expected[2] = expects::SELF_CLOSING_SLASH;
                     break;
                 case expects::CLOSING_SLASH:
-                    expected = expects::NODE_CLOSING_NAME;
+                    expected[0] = expects::NODE_CLOSING_NAME;
+                    break;
+                case expects::SELF_CLOSING_SLASH:
+                    ++closeTokens;
+                    tokens.push_back({TokenType::TAG_CLOSE, "/", {}});
+
+                    expected[1] = expects::GREATER_THEN;                
                     break;
                 case expects::NODE_CLOSING_NAME:
-                    tokens.push_back( {TokenType::TAG_CLOSE, "/" + words[i], {}});
-                    expected = expects::GREATER_THEN;
+                    tokens.push_back({TokenType::TAG_CLOSE, "/" + words[i], {}});
+                    expected[0] = expects::GREATER_THEN;
+                    ++closeTokens;
                     break;
+                
                 case expects::NOT_EXPECTED:
                     throw std::runtime_error("Not expected");
                 }
@@ -460,7 +497,7 @@ namespace xmlParser
 
         if (closeTokens != openTokens)
         {
-            std::cerr << "\033[1;31mWarning! Missing Opening Or Closing Tags\033[0m\n";
+            std::cerr << "\033[1;31mWarning! Missing Opening Or Closing Tags\033[0m\nOpening " << openTokens << " Closing " << closeTokens << '\n';
         }
 
         return tokens;
@@ -479,23 +516,22 @@ namespace xmlParser
 
         if (tokens.size() == 0)
         {
-            std::cerr << "File is empty!\n";
+            std::cerr << "Warning! File is empty!\n";
             return std::make_shared<xmlNode>();
         }
 
-        // std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>(tokens[0].kind, tokens[0].value, nullptr);
-        std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>();
+        std::shared_ptr<xmlNode> root = std::make_shared<xmlNode>(tokens[0], nullptr);
         std::shared_ptr<xmlNode> current = root;
 
         // Ugly ahh syntax for skipping 1 elem :)
-        for (const auto &[kind, value, attr] : tokens /* | std::ranges::views::drop(1) */)
+        for (const auto &token : tokens | std::ranges::views::drop(1))
         {
-            switch (kind)
+            switch (token.kind)
             {
             case TokenType::TAG_OPEN:
             {
 
-                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
+                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(token, current);
                 current->addChild(child);
                 current = child;
 
@@ -505,7 +541,7 @@ namespace xmlParser
             case TokenType::TAG_CLOSE:
             {
 
-                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, root);
+                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(token, root);
                 current->addChild(child);
                 if (auto parent = current->prev.lock())
                 {
@@ -517,16 +553,10 @@ namespace xmlParser
             case TokenType::META:
             case TokenType::TEXT:
             {
-                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
+                std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(token, current);
                 current->addChild(child);
                 break;
             }
-
-                // case TokenType::META:
-                // {
-                //     std::shared_ptr<xmlNode> child = std::make_shared<xmlNode>(kind, value, current);
-
-                // }
 
             default:
                 std::cerr << "Unreachable! How did we get here?\n";

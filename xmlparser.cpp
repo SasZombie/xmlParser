@@ -55,92 +55,97 @@ namespace xmlParser
         return false;
     }
 
-    static std::vector<std::string> tokenize(const std::string &line)
+    static std::vector<std::string> tokenize(std::ifstream &file)
     {
+        std::string line;
         std::vector<std::string> tokens;
-        std::string current;
-        bool inQuote = false;
-        bool inNode = false;
+        bool inComment = false;
 
-        for (size_t i = 0; i < line.size(); ++i)
+        while (std::getline(file, line))
         {
-            char c = line[i];
+            std::string current;
+            bool inQuote = false;
+            bool inNode = false;
 
-            if (inQuote)
+            for (size_t i = 0; i < line.size(); ++i)
             {
-                if (c == '"')
-                {
-                    tokens.push_back(current);
-                    current.clear();
-                    inQuote = false;
-                }
+                char c = line[i];
 
-                current += c;
-            }
-            else if (inNode)
-            {
-                if (c == '<')
+                if (inQuote)
                 {
-                    tokens.push_back(current);
-                    tokens.push_back("<");
-                    current.clear();
-                    inNode = false;
+                    if (c == '"')
+                    {
+                        tokens.push_back(current);
+                        current.clear();
+                        inQuote = false;
+                    }
+
+                    current += c;
                 }
-                else if (c == '\0')
+                else if (inNode)
                 {
-                    tokens.push_back(current);
-                    current.clear();
-                    inNode = false;
+                    if (c == '<')
+                    {
+                        tokens.push_back(current);
+                        tokens.push_back("<");
+                        current.clear();
+                        inNode = false;
+                    }
+                    else if (c == '\0')
+                    {
+                        tokens.push_back(current);
+                        current.clear();
+                        inNode = false;
+                    }
+                    else
+                    {
+                        current += c;
+                    }
                 }
                 else
                 {
-                    current += c;
+                    if (std::isspace(c))
+                    {
+                        if (!current.empty())
+                        {
+                            tokens.push_back(current);
+                            current.clear();
+                        }
+                    }
+                    else if (c == '<' || c == '>' || c == '=' || c == '/')
+                    {
+                        if (!current.empty())
+                        {
+                            tokens.push_back(current);
+                            current.clear();
+                        }
+                        tokens.push_back(std::string(1, c));
+
+                        if (c == '>')
+                        {
+                            inNode = true;
+                        }
+                    }
+                    else if (c == '"')
+                    {
+                        if (!current.empty())
+                        {
+                            tokens.push_back(current);
+                            current.clear();
+                        }
+                        tokens.push_back("\"");
+                        inQuote = true;
+                    }
+                    else
+                    {
+                        current += c;
+                    }
                 }
             }
-            else
+            if (!current.empty())
             {
-                if (std::isspace(c))
-                {
-                    if (!current.empty())
-                    {
-                        tokens.push_back(current);
-                        current.clear();
-                    }
-                }
-                else if (c == '<' || c == '>' || c == '=' || c == '/')
-                {
-                    if (!current.empty())
-                    {
-                        tokens.push_back(current);
-                        current.clear();
-                    }
-                    tokens.push_back(std::string(1, c));
-
-                    if (c == '>')
-                    {
-                        inNode = true;
-                    }
-                }
-                else if (c == '"')
-                {
-                    if (!current.empty())
-                    {
-                        tokens.push_back(current);
-                        current.clear();
-                    }
-                    tokens.push_back("\"");
-                    inQuote = true;
-                }
-                else
-                {
-                    current += c;
-                }
+                tokens.push_back(current);
             }
-        }
-
-        if (!current.empty())
-        {
-            tokens.push_back(current);
         }
 
         return tokens;
@@ -369,129 +374,130 @@ namespace xmlParser
         xmlAttribute attr;
         std::string nodeValue;
         // MARK: TODO!!!
-        while (std::getline(input, line))
+
+        const auto &words = tokenize(input);
+        const size_t wordsSize = words.size();
+
+#if 1
+        for (size_t i = 0; i < wordsSize; ++i)
         {
-            const auto &words = tokenize(line);
-            for (size_t i = 0; i < words.size(); ++i)
+            bool found = false;
+
+            for (size_t exp = 0; exp < expectedSize; ++exp)
             {
-                bool found = false;
-
-                for (size_t exp = 0; exp < expectedSize; ++exp)
+                if (isExpected(expected[exp], words[i][0]))
                 {
-                    if (isExpected(expected[exp], words[i][0]))
-                    {
-                        found = true;
-                        expected[0] = expected[exp];
-                        expected[1] = expects::NOT_EXPECTED;
-                        expected[2] = expects::NOT_EXPECTED;
-                        break;
-                    }
+                    found = true;
+                    expected[0] = expected[exp];
+                    expected[1] = expects::NOT_EXPECTED;
+                    expected[2] = expects::NOT_EXPECTED;
+                    break;
                 }
-                if (!found)
+            }
+            if (!found)
+            {
+                // std::cout << (int)expected << ' ' << (int)expected2 << '\n';
+                // for (const auto &elem : tokens)
+                // {
+                //     std::cout << elem << '\n';
+                // }
+                throw std::runtime_error("Invalid Formated Doccument :3, at Word:" + words[i]);
+            }
+
+            switch (expected[0])
+            {
+            case expects::LESS_THEN:
+                if (!nodeValue.empty())
                 {
-                    // std::cout << (int)expected << ' ' << (int)expected2 << '\n';
-                    // for (const auto &elem : tokens)
-                    // {
-                    //     std::cout << elem << '\n';
-                    // }
-                    throw std::runtime_error("Invalid Formated Doccument :3, at Word:" + words[i]);
+                    tokens.push_back({TokenType::TEXT, nodeValue, {}});
+                    nodeValue.clear();
                 }
+                expected[0] = expects::NODE_NAME;
+                expected[1] = expects::CLOSING_SLASH;
+                break;
 
-                switch (expected[0])
+            case expects::NODE_NAME:
+                tokens.push_back({TokenType::TAG_OPEN, words[i], {}});
+                expected[0] = expects::GREATER_THEN;
+                expected[1] = expects::ATTRIBUTE_NAME;
+                expected[2] = expects::SELF_CLOSING_SLASH;
+                ++openTokens;
+
+                break;
+
+            case expects::NODE_VALUE:
+                nodeValue = nodeValue + words[i];
+                expected[0] = expects::LESS_THEN;
+                expected[1] = expects::NODE_VALUE;
+                break;
+
+            case expects::GREATER_THEN:
+                if (!attr.value.empty() && !attr.name.empty())
                 {
-                case expects::LESS_THEN:
-                    if (!nodeValue.empty())
+                    const auto result = attributes.insert(attr);
+                    if (!result.second)
                     {
-                        tokens.push_back({TokenType::TEXT, nodeValue, {}});
-                        nodeValue.clear();
+                        throw std::runtime_error("Attribute " + words[i] + " is redifined!\n");
                     }
-                    expected[0] = expects::NODE_NAME;
-                    expected[1] = expects::CLOSING_SLASH;
-                    break;
-
-                case expects::NODE_NAME:
-                    tokens.push_back({TokenType::TAG_OPEN, words[i], {}});
-                    expected[0] = expects::GREATER_THEN;
-                    expected[1] = expects::ATTRIBUTE_NAME;
-                    expected[2] = expects::SELF_CLOSING_SLASH;
-                    ++openTokens;
-
-                    break;
-
-                case expects::NODE_VALUE:
-                    nodeValue = nodeValue + words[i];
-                    expected[0] = expects::LESS_THEN;
-                    expected[1] = expects::NODE_VALUE;
-                    break;
-
-                case expects::GREATER_THEN:
-                    if (!attr.value.empty() && !attr.name.empty())
-                    {
-                        const auto result = attributes.insert(attr);
-                        if (!result.second)
-                        {
-                            throw std::runtime_error("Attribute " + words[i] + " is redifined!\n");
-                        }
-                        attr.name.clear();
-                        attr.value.clear();
-                    }
-
-                    if (!attributes.empty())
-                    {
-
-                        tokens.back().attr = attributes;
-                        attributes.clear();
-                    }
-                    expected[0] = expects::NODE_VALUE;
-                    expected[1] = expects::LESS_THEN;
-                    break;
-                case expects::ATTRIBUTE_NAME:
-                    if (!attr.value.empty() && !attr.name.empty())
-                    {
-                        const auto result = attributes.insert(attr);
-                        if (!result.second)
-                        {
-                            throw std::runtime_error("Attribute " + words[i] + " is redifined!\n");
-                        }
-                        attr.name.clear();
-                        attr.value.clear();
-                    }
-                    attr.name = words[i];
-                    expected[0] = expects::EQUALS;
-                    break;
-                case expects::EQUALS:
-                    expected[0] = expects::OPEN_QUATE;
-                    break;
-                case expects::OPEN_QUATE:
-                    expected[0] = expects::ATTRIBUTE_VALUE;
-                    break;
-                case expects::ATTRIBUTE_VALUE:
-                    attr.value = words[i];
-                    expected[0] = expects::CLOSE_QUATE;
-                    break;
-                case expects::CLOSE_QUATE:
-                    expected[0] = expects::GREATER_THEN;
-                    expected[1] = expects::ATTRIBUTE_NAME;
-                    expected[2] = expects::SELF_CLOSING_SLASH;
-                    break;
-                case expects::CLOSING_SLASH:
-                    expected[0] = expects::NODE_CLOSING_NAME;
-                    break;
-                case expects::SELF_CLOSING_SLASH:
-                    ++closeTokens;
-                    tokens.push_back({TokenType::TAG_CLOSE, "/", {}});
-
-                    expected[1] = expects::GREATER_THEN;                
-                    break;
-                case expects::NODE_CLOSING_NAME:
-                    tokens.push_back({TokenType::TAG_CLOSE, "/" + words[i], {}});
-                    expected[0] = expects::GREATER_THEN;
-                    ++closeTokens;
-                    break;
-                
-                case expects::NOT_EXPECTED:
-                    throw std::runtime_error("Not expected");
+                    attr.name.clear();
+                    attr.value.clear();
                 }
+
+                if (!attributes.empty())
+                {
+
+                    tokens.back().attr = attributes;
+                    attributes.clear();
+                }
+                expected[0] = expects::NODE_VALUE;
+                expected[1] = expects::LESS_THEN;
+                break;
+            case expects::ATTRIBUTE_NAME:
+                if (!attr.value.empty() && !attr.name.empty())
+                {
+                    const auto result = attributes.insert(attr);
+                    if (!result.second)
+                    {
+                        throw std::runtime_error("Attribute " + words[i] + " is redifined!\n");
+                    }
+                    attr.name.clear();
+                    attr.value.clear();
+                }
+                attr.name = words[i];
+                expected[0] = expects::EQUALS;
+                break;
+            case expects::EQUALS:
+                expected[0] = expects::OPEN_QUATE;
+                break;
+            case expects::OPEN_QUATE:
+                expected[0] = expects::ATTRIBUTE_VALUE;
+                break;
+            case expects::ATTRIBUTE_VALUE:
+                attr.value = words[i];
+                expected[0] = expects::CLOSE_QUATE;
+                break;
+            case expects::CLOSE_QUATE:
+                expected[0] = expects::GREATER_THEN;
+                expected[1] = expects::ATTRIBUTE_NAME;
+                expected[2] = expects::SELF_CLOSING_SLASH;
+                break;
+            case expects::CLOSING_SLASH:
+                expected[0] = expects::NODE_CLOSING_NAME;
+                break;
+            case expects::SELF_CLOSING_SLASH:
+                ++closeTokens;
+                tokens.push_back({TokenType::TAG_CLOSE, "/", {}});
+
+                expected[1] = expects::GREATER_THEN;
+                break;
+            case expects::NODE_CLOSING_NAME:
+                tokens.push_back({TokenType::TAG_CLOSE, "/" + words[i], {}});
+                expected[0] = expects::GREATER_THEN;
+                ++closeTokens;
+                break;
+
+            case expects::NOT_EXPECTED:
+                throw std::runtime_error("Not expected");
             }
         }
 
@@ -499,7 +505,7 @@ namespace xmlParser
         {
             std::cerr << "\033[1;31mWarning! Missing Opening Or Closing Tags\033[0m\nOpening " << openTokens << " Closing " << closeTokens << '\n';
         }
-
+#endif
         return tokens;
     }
 
